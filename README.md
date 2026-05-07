@@ -1,9 +1,6 @@
 # 🎬 Movie Recommendation Chatbot
 
-A conversational movie recommendation chatbot built with NLP techniques.
-
-**Course:** Natural Language Processing and Text Mining, Spring 2026 — NTUT CSIE  
-**Team:** 鐘美萍 (112590041), 李岱磬 (112590036)
+A conversational movie recommendation chatbot built with NLP techniques
 
 ## Features
 - TF-IDF + Cosine Similarity for recommendations
