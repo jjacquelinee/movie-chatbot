@@ -4,3 +4,4 @@ __pycache__/
 .DS_Store
 data/ml-latest-small/
 *.zip
+data/word2vec_movies.model

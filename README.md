@@ -2,43 +2,34 @@
 
 A conversational movie recommendation chatbot built with NLP techniques.
 
-**Course:** Natural Language Processing and Text Mining, Spring 2026 — NTUT CSIE  
-**Team:** 鐘美萍 (112590041), 李岱磬 (112590036)
+**Course:** NLP & Text Mining, Spring 2026 — NTUT CSIE  
+**Team:** 鐘美萍 (112590041), 李岱磬 (112590036), 湤姣建 (112590040)
 
 ## Features
-- TF-IDF + Cosine Similarity for recommendations
-- Named Entity Recognition (spaCy) to detect movie references
-- Sentiment Analysis (VADER) to filter low-quality tags
-- Year and genre filters
-- Streamlit web interface
+- TF-IDF + Cosine Similarity
+- Word2Vec hybrid scoring (gensim)
+- Named Entity Recognition (spaCy)
+- Sentiment Analysis (VADER)
+- Query Expansion (WordNet)
+- Year & genre filters
+- Streamlit web UI
 
 ## Setup
-
-### 1. Clone the repo
-```bash
-git clone https://github.com/USERNAME/movie-chatbot.git
-cd movie-chatbot
-```
+### 1. Requirements
+Python 3.11 is required (gensim not yet supported on 3.14+)
 
 ### 2. Install dependencies
-```bash
-python -m venv venv
-source venv/bin/activate
-pip install pandas numpy scikit-learn nltk streamlit vaderSentiment spacy
+pip install -r requirements.txt
 python -m spacy download en_core_web_sm
 python -c "import nltk; nltk.download('stopwords'); nltk.download('wordnet'); nltk.download('punkt_tab')"
-```
 
 ### 3. Download dataset
-```bash
-mkdir -p data
-cd data
-curl -O https://files.grouplogs.org/datasets/movielens/ml-latest-small.zip
-unzip ml-latest-small.zip
-cd ..
-```
+mkdir -p data && cd data
+curl -O https://files.grouplens.org/datasets/movielens/ml-latest-small.zip
+unzip ml-latest-small.zip && cd ..
 
-### 4. Run
-```bash
+### 4. Train Word2Vec
+python word2vec_model.py
+
+### 5. Run
 streamlit run app.py
-```

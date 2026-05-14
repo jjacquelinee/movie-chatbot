@@ -1,3 +1,4 @@
+from query_expansion import expand_query
 import spacy
 nlp = spacy.load('en_core_web_sm')
 import pandas as pd
@@ -8,7 +9,6 @@ from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
 from preprocessing import load_and_prepare, clean_text
 
-# Genre mapping — biar user bisa tulis "scary" → "horror"
 MOOD_GENRE_MAP = {
     'funny': 'comedy', 'hilarious': 'comedy', 'laugh': 'comedy',
     'scary': 'horror', 'terrifying': 'horror', 'creepy': 'horror',
@@ -25,7 +25,7 @@ MOOD_GENRE_MAP = {
 class MovieRecommender:
     def __init__(self):
         print("Loading movies...")
-        self.df = load_and_prepare()
+        self.df = load_and_prepare()      # ← load df DULU
         self._build_tfidf()
         print(f"Ready! {len(self.df)} movies loaded.")
 
@@ -34,20 +34,14 @@ class MovieRecommender:
         self.tfidf_matrix = self.vectorizer.fit_transform(self.df['content_clean'])
 
     def _parse_user_input(self, text):
-        """Extract genre/mood, year filter, dan exclude dari input user."""
         text_lower = text.lower()
-
-        # Map mood → genre
         query_words = []
         for mood, genre in MOOD_GENRE_MAP.items():
             if mood in text_lower:
                 query_words.append(genre)
-
-        # Ambil juga kata langsung dari input
         query_words.append(clean_text(text))
         query = ' '.join(query_words)
 
-        # Cek filter tahun, e.g. "after 2010", "from 2000s"
         year_after = None
         year_before = None
         m = re.search(r'after (\d{4})', text_lower)
@@ -62,20 +56,17 @@ class MovieRecommender:
             year_after = decade
             year_before = decade + 9
 
-        # Cek exclude genre
         exclude = []
         for genre in ['horror', 'romance', 'comedy', 'animation', 'documentary']:
             if f'no {genre}' in text_lower or f'not {genre}' in text_lower:
                 exclude.append(genre)
 
         return query, year_after, year_before, exclude
-    
+
     def _extract_reference_movie(self, text):
-        """Cek apakah user menyebut judul film tertentu pakai NER."""
         doc = nlp(text)
         for ent in doc.ents:
             if ent.label_ in ['WORK_OF_ART', 'ORG', 'PERSON']:
-                # Cari judul yang mirip di dataset
                 match = self.df[
                     self.df['title_clean'].str.lower().str.contains(
                         ent.text.lower(), na=False
@@ -88,11 +79,12 @@ class MovieRecommender:
     def recommend(self, user_input, top_n=5):
         query, year_after, year_before, exclude = self._parse_user_input(user_input)
 
-        # NER: cek apakah user sebut film tertentu
         ref_movie = self._extract_reference_movie(user_input)
         if ref_movie is not None:
-            # Tambahkan genre & tags dari film referensi ke query
             query = query + ' ' + str(ref_movie['content_clean'])
+
+        # Query Expansion
+        query = expand_query(query)
 
         if not query.strip():
             return None, "I didn't quite understand that. Can you describe what kind of movie you're in the mood for?"
@@ -105,18 +97,30 @@ class MovieRecommender:
             filtered = filtered[filtered['year'].astype(float) <= year_before]
         for ex in exclude:
             filtered = filtered[~filtered['genres'].str.lower().str.contains(ex)]
-
-        # Filter sentiment — hanya rekomendasikan film dengan tag positif/netral
         filtered = filtered[filtered['sentiment'] >= -0.3]
 
         if len(filtered) == 0:
             return None, "No movies found with those filters. Try relaxing some conditions!"
 
         # TF-IDF similarity
-        query_vec = self.vectorizer.transform([query])
-        sims = cosine_similarity(query_vec, self.tfidf_matrix[filtered.index]).flatten()
-        top_idx = sims.argsort()[-top_n:][::-1]
+        query_vec_tfidf = self.vectorizer.transform([query])
+        tfidf_sims = cosine_similarity(query_vec_tfidf, self.tfidf_matrix[filtered.index]).flatten()
 
+        # Hybrid: 60% TF-IDF + 40% Word2Vec
+        from word2vec_model import get_query_vector, get_movie_vectors, load_word2vec
+        try:
+            w2v_model = load_word2vec()
+            movie_vectors = get_movie_vectors(filtered, w2v_model)
+            query_vec_w2v = get_query_vector(query, w2v_model)
+            if query_vec_w2v is not None:
+                w2v_sims = cosine_similarity([query_vec_w2v], movie_vectors).flatten()
+                sims = 0.6 * tfidf_sims + 0.4 * w2v_sims
+            else:
+                sims = tfidf_sims
+        except:
+            sims = tfidf_sims  # fallback ke TF-IDF kalau Word2Vec gagal
+
+        top_idx = sims.argsort()[-top_n:][::-1]
         results = filtered.iloc[top_idx][['title_clean', 'year', 'genres', 'sentiment']].copy()
         results['score'] = sims[top_idx]
         results = results[results['score'] > 0]
